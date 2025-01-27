@@ -1,0 +1,9 @@
+PYTHONUNBUFFERED = 1
+ENV = "dev"
+SPARK_EXECUTOR_MEMORY = "8g"
+SPARK_DRIVER_MEMORY = "8g"
+SPARK_MEMORY_FRACTION = "0.8"
+
+SPARK_DRIVER_EXTRACLASSPATH = "~/.local/spark/lib-jars/*"
+SPARK_EXECUTOR_EXTRACLASSPATH = "~/.local/spark/lib-jars/*"
+SPARK_SERIALIZER = "org.apache.spark.serializer.KryoSerializer"

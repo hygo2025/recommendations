@@ -1,0 +1,15 @@
+boto3
+requests
+pyarrow
+s3fs
+pandas
+dynaconf
+ipykernel
+fastparquet
+numpy
+pytz
+PyYAML
+black
+dynaconf
+pyspark
+python-dateutil
