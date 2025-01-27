@@ -1,17 +1,27 @@
 VENV_DIR = .local
 REQUIREMENTS_FILE = requirements.txt
 ACTIVATE = . $(VENV_DIR)/bin/activate
+LIB_INSTALL_PATH = ~/.local/spark/lib-jars/
 
 PYTHONPATH ?= $(PWD)
 
 export PYTHONUNBUFFERED = 1
 export PYTHONPATH
 
+setup_java:
+	bash ./scripts/install_java.sh
+
 $(VENV_DIR):
 	python3 -m venv $(VENV_DIR)
 	$(ACTIVATE) && pip install --upgrade pip && pip install -r $(REQUIREMENTS_FILE)
 
-install: $(VENV_DIR)
+install: setup_java $(VENV_DIR)
+	@if [ -z "$(shell ls $(LIB_INSTALL_PATH)/hadoop-aws* 2>/dev/null)" ]; then \
+		echo "Libraries not found. Running the setup script."; \
+		bash ./scripts/download_libs.sh; \
+	else \
+		echo "Libraries already installed."; \
+	fi
 
 update:
 	$(ACTIVATE) && pip install --upgrade -r $(REQUIREMENTS_FILE)

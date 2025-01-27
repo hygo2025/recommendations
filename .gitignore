@@ -113,7 +113,7 @@ venv_nrec/
 .vscode/
 
 # Local virtual environment
-.re-recommendations-env
+.local
 
 .idea/
 .data/
