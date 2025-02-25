@@ -28,7 +28,7 @@ class Downloader:
                 downloaded += len(data)
                 if total:
                     percent = downloaded / total * 100
-                    self.logger.info(f"\rProgresso: {percent:.2f}%", end="")
+                    self.logger.info(f"\rProgresso: {percent:.2f}%")
             self.logger.info("\nDownload concluído.")
 
     def get_common_folder(self, members):

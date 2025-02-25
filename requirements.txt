@@ -4,3 +4,7 @@ pyspark
 requests
 dynaconf
 scipy
+pyarrow
+grpcio
+protobuf
+grpcio-status

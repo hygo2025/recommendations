@@ -21,3 +21,8 @@ class RunnerEventType(Enum):
             if item.value == value:
                 return item
         raise ValueError(f"{value} is not a valid {cls.__name__}")
+
+
+class ItemSimMeasure(Enum):
+    SIM_COCCURRENCE = "cooccurrence"
+    SIM_COSINE = "cosise"
