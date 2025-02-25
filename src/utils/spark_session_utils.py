@@ -7,7 +7,7 @@ from src.utils.enviroment import is_local
 
 def _create_spark_session(name: str) -> SparkSession:
     if is_local():
-        return (
+        spark = (
             SparkSession.builder.appName(name)
             .config(
                 "spark.hadoop.fs.s3a.aws.credentials.provider",
@@ -17,9 +17,7 @@ def _create_spark_session(name: str) -> SparkSession:
             .config("spark.driver.memory", settings.SPARK_DRIVER_MEMORY)
             .config("spark.memory.fraction", settings.SPARK_MEMORY_FRACTION)
             .config("spark.driver.extraClassPath", settings.SPARK_DRIVER_EXTRACLASSPATH)
-            .config(
-                "spark.executor.extraClassPath", settings.SPARK_EXECUTOR_EXTRACLASSPATH
-            )
+            .config("spark.executor.extraClassPath", settings.SPARK_EXECUTOR_EXTRACLASSPATH)
             .config("spark.serializer", settings.SPARK_SERIALIZER)
             .config("spark.hadoop.fs.s3a.aws.profile", "default")
             .config("spark.sql.warnings", "false")
@@ -29,8 +27,10 @@ def _create_spark_session(name: str) -> SparkSession:
             # .config("spark.eventLog.dir", "/tmp/spark/logs")
             .getOrCreate()
         )
+        return spark
 
-    return SparkSession.builder.appName(name).getOrCreate()
+    spark = SparkSession.builder.appName(name).getOrCreate()
+    return spark
 
 
 def create_spark_session(

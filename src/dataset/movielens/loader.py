@@ -1,16 +1,18 @@
 import os
 import pandas as pd
 
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, DataFrame
 
 from src.dataset.movielens.downloader import Downloader
 from src.utils.enums import MovieLensDataset, MovieLensType
+from src.utils.logger import Logger
 
 
 class Loader:
     def __init__(self, download_folder="/tmp/dataset", extract_folder="/tmp/dataset"):
         self.extract_folder = extract_folder
         self.download_folder = download_folder
+        self.logger = Logger.get_logger(name="Loader")
 
     def _get_file_path(self, dataset: MovieLensDataset, ml_type: MovieLensType) -> str:
         dataset_folder = os.path.join(self.extract_folder, dataset.name)
@@ -19,11 +21,11 @@ class Loader:
     def _ensure_dataset(self, dataset: MovieLensDataset):
         dataset_folder = os.path.join(self.extract_folder, dataset.name)
         if not os.path.exists(dataset_folder):
-            print(f"Dataset {dataset.name} não encontrado em {dataset_folder}. Iniciando download e extração...")
+            self.logger.info(f"Dataset {dataset.name} não encontrado em {dataset_folder}. Iniciando download e extração...")
             downloader = Downloader(download_folder=self.download_folder, extract_folder=self.extract_folder)
             downloader.download_and_extract_dataset(dataset)
         else:
-            print(f"Dataset {dataset.name} já existe em {dataset_folder}.")
+            self.logger.info(f"Dataset {dataset.name} já existe em {dataset_folder}.")
 
     def load_pandas(self, dataset: MovieLensDataset, ml_type: MovieLensType) -> pd.DataFrame:
         file_path = self._get_file_path(dataset, ml_type)
@@ -34,7 +36,7 @@ class Loader:
         df = pd.read_csv(file_path)
         return df
 
-    def load_spark(self, dataset: MovieLensDataset, ml_type: MovieLensType):
+    def load_spark(self, dataset: MovieLensDataset, ml_type: MovieLensType) -> DataFrame:
         file_path = self._get_file_path(dataset, ml_type)
         if not os.path.exists(file_path):
             self._ensure_dataset(dataset)
@@ -43,27 +45,3 @@ class Loader:
         spark = SparkSession.builder.appName("MovieLensDataLoader").getOrCreate()
         df = spark.read.csv(file_path, header=True, inferSchema=True)
         return df
-
-
-# # Exemplo de uso:
-# if __name__ == "__main__":
-#     loader = MovieLensDataLoader(
-#         extract_folder="/home/hygo/Development/trabalho_final/data/extract",
-#         download_folder="/home/hygo/Development/trabalho_final/data/zip"
-#     )
-#
-#     # Exemplo: carregar o arquivo tags.csv do dataset ML_100K em um DataFrame do Pandas
-#     try:
-#         df_pd = loader.load_pandas(MovieLensDataset.ML_100K, MovieLensType.MOVIES)
-#         print("DataFrame do Pandas:")
-#         print(df_pd.head())
-#     except Exception as e:
-#         print(e)
-#
-#     # Exemplo: carregar o arquivo movies.csv do dataset ML_100K em um DataFrame do Spark
-#     try:
-#         df_spark = loader.load_spark(MovieLensDataset.ML_100K, MovieLensType.MOVIES)
-#         print("DataFrame do Spark:")
-#         df_spark.show(5)
-#     except Exception as e:
-#         print(e)

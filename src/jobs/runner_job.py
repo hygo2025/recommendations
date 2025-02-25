@@ -1,4 +1,11 @@
+import sys
+
+import numpy as np
+import pandas as pd
+import scipy
+
 from src.jobs.job_executors.sar_job_executor import SarJobExecutor
+from src.utils.logger import Logger
 from src.utils.enums import RunnerEventType
 from src.utils.enviroment import runner_type
 
@@ -8,18 +15,22 @@ class RunnerJob:
     def do(
             runner_type_str: str = None,
     ):
-        print(
-            f"Running job, runner_type: {runner_type_str}"
-        )
+        logger = Logger.get_logger(name="RunnerJob")
+        logger.info(f"-"*70)
+        logger.info(f"Pandas version: {pd.__version__}")
+        logger.info(f"NumPy version: {np.__version__}")
+        logger.info(f"System version: {sys.version}")
+        logger.info(f"SciPy version: {scipy.__version__}")
+        logger.info(f"-"*70)
 
-        type = RunnerEventType.value_of(runner_type_str)
+        logger.info(f"Running job, runner_type: {runner_type_str}")
 
         executor_classes = {
             "sar": SarJobExecutor,
         }
 
         job_executors = [
-            cls(runner_type=type)
+            cls(runner_type=RunnerEventType.value_of(runner_type_str))
             for cls in executor_classes.values()
         ]
 

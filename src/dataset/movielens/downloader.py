@@ -2,6 +2,7 @@ import os
 import requests
 import zipfile
 
+from src.utils.logger import Logger
 from src.utils.enums import MovieLensDataset
 
 
@@ -9,6 +10,7 @@ class Downloader:
     def __init__(self, download_folder="/tmp/dataset", extract_folder="/tmp/dataset"):
         self.download_folder = download_folder
         self.extract_folder = extract_folder
+        self.logger = Logger.get_logger(name="Downloader")
 
         if not os.path.exists(self.download_folder):
             os.makedirs(self.download_folder)
@@ -18,7 +20,7 @@ class Downloader:
     def download_file(self, url, save_path):
         response = requests.get(url, stream=True)
         total = int(response.headers.get('content-length', 0))
-        print(f"Iniciando download de {url}")
+        self.logger.info(f"Iniciando download de {url}")
         with open(save_path, "wb") as file:
             downloaded = 0
             for data in response.iter_content(chunk_size=1024):
@@ -26,8 +28,8 @@ class Downloader:
                 downloaded += len(data)
                 if total:
                     percent = downloaded / total * 100
-                    print(f"\rProgresso: {percent:.2f}%", end="")
-            print("\nDownload concluído.")
+                    self.logger.info(f"\rProgresso: {percent:.2f}%", end="")
+            self.logger.info("\nDownload concluído.")
 
     def get_common_folder(self, members):
         folder_names = [member.split('/')[0] for member in members if '/' in member]
@@ -41,9 +43,9 @@ class Downloader:
         if not os.path.exists(extract_to):
             os.makedirs(extract_to, exist_ok=True)
         if not zipfile.is_zipfile(zip_path):
-            print(f"O arquivo {zip_path} não é um arquivo zip válido.")
+            self.logger.info(f"O arquivo {zip_path} não é um arquivo zip válido.")
             return
-        print(f"Descompactando {zip_path} para {extract_to}...")
+        self.logger.info(f"Descompactando {zip_path} para {extract_to}...")
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             members = zip_ref.namelist()
             common_folder = self.get_common_folder(members)
@@ -60,7 +62,7 @@ class Downloader:
                                 target.write(source.read())
             else:
                 zip_ref.extractall(extract_to)
-        print("Descompactação concluída.")
+        self.logger.info("Descompactação concluída.")
 
     def is_extracted(self, dataset: MovieLensDataset) -> bool:
         expected_path = os.path.join(self.extract_folder, dataset.name)
@@ -68,7 +70,7 @@ class Downloader:
 
     def download_and_extract_dataset(self, dataset: MovieLensDataset):
         if self.is_extracted(dataset):
-            print(f"O dataset {dataset.name} já foi extraído. Pulando...")
+            self.logger.info(f"O dataset {dataset.name} já foi extraído. Pulando...")
             return
 
         url = dataset.value

@@ -1,12 +1,13 @@
 from abc import ABC, abstractmethod
-import logging
+
+from src.utils.logger import Logger
 
 
 class AbstractJobExecutor(ABC):
 
     def __init__(self, cls_name: str):
         self.cls_name = cls_name
-        self.logger = logging.getLogger(cls_name)
+        self.logger = Logger.get_logger(name=cls_name)
 
 
     def run(self):
