@@ -1,4 +1,4 @@
-from src.jobs.job_executors.example_job_executor import ExampleJobExecutor
+from src.jobs.job_executors.sar_job_executor import SarJobExecutor
 from src.utils.enums import RunnerEventType
 from src.utils.enviroment import runner_type
 
@@ -15,7 +15,7 @@ class RunnerJob:
         type = RunnerEventType.value_of(runner_type_str)
 
         executor_classes = {
-            "example": ExampleJobExecutor,
+            "sar": SarJobExecutor,
         }
 
         job_executors = [

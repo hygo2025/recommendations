@@ -1,3 +1,4 @@
+PYTHON_VERSION = 3.8.10
 VENV_DIR = .local
 REQUIREMENTS_FILE = requirements.txt
 ACTIVATE = . $(VENV_DIR)/bin/activate
@@ -8,11 +9,23 @@ PYTHONPATH ?= $(PWD)
 export PYTHONUNBUFFERED = 1
 export PYTHONPATH
 
+check_python_version:
+	@installed_version=$$(pyenv versions --bare | grep $(PYTHON_VERSION)); \
+	if [ -z "$$installed_version" ]; then \
+		 echo "Python version $(PYTHON_VERSION) not found. Installing..."; \
+		 pyenv install $(PYTHON_VERSION); \
+		 pyenv global $(PYTHON_VERSION); \
+	else \
+		 echo "Python version $(PYTHON_VERSION) is already installed."; \
+			 fi
+
 setup_java:
 	bash ./scripts/install_java.sh
 
-$(VENV_DIR):
-	python3 -m venv $(VENV_DIR)
+$(VENV_DIR): check_python_version
+	@echo "Creating virtual environment in $(VENV_DIR)..."
+	pyenv local $(PYTHON_VERSION)
+	pyenv exec python -m venv $(VENV_DIR)
 	$(ACTIVATE) && pip install --upgrade pip && pip install -r $(REQUIREMENTS_FILE)
 
 install: setup_java $(VENV_DIR)
