@@ -8,3 +8,4 @@ pyarrow
 grpcio
 protobuf
 grpcio-status
+mlflow

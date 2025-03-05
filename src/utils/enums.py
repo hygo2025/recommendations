@@ -2,6 +2,7 @@ from enum import Enum
 
 class MovieLensDataset(Enum):
     ML_100K = "https://files.grouplens.org/datasets/movielens/ml-latest-small.zip"
+    ML_1M = "https://files.grouplens.org/datasets/movielens/ml-1m.zip"
     ML_20M = "https://files.grouplens.org/datasets/movielens/ml-20m.zip"
     ML_32M = "https://files.grouplens.org/datasets/movielens/ml-32m.zip"
 
@@ -14,6 +15,7 @@ class MovieLensType(Enum):
 
 class RunnerEventType(Enum):
     SAR = "sar"
+    SAS = "sas"
 
     @classmethod
     def value_of(cls, value):
