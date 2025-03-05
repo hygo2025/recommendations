@@ -1,5 +1,4 @@
 from src.jobs.job_executors.abstract_job_executor import AbstractJobExecutor
-# from src.runners.sar_runner import SarRunner
 from src.runners.sas_rec_runner import SasRecRunner
 
 from src.utils.enums import RunnerEventType

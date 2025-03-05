@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import scipy
 
-from src.jobs.job_executors.sar_job_executor import SarJobExecutor
 from src.jobs.job_executors.sas_rec_job_executor import SasRecJobExecutor
 from src.utils.logger import Logger
 from src.utils.enums import RunnerEventType
@@ -27,7 +26,6 @@ class RunnerJob:
         logger.info(f"Running job, runner_type: {runner_type_str}")
 
         executor_classes = {
-            "sar": SarJobExecutor,
             "sas_rec": SasRecJobExecutor,
         }
 
