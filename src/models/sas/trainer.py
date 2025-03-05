@@ -1,7 +1,7 @@
-from collections import OrderedDict
 import copy
 import logging
 import os
+from typing import OrderedDict
 
 import mlflow
 import numpy as np
@@ -10,13 +10,12 @@ from torch import nn
 from torch.optim import Optimizer
 from tqdm import tqdm, trange
 
-from dataset import Dataset
+from src.models.sas.dataset import Dataset
 from src.models.sas.sasrec import SASRec
 from src.models.sas.utils.get_scheduler import get_scheduler
 from src.models.sas.utils.utils import get_negative_samples
 
 StateDict = OrderedDict[str, torch.Tensor]
-
 
 logger = logging.getLogger()
 

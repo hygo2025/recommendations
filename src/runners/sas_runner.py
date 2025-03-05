@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import time
 from collections import defaultdict
@@ -18,18 +19,19 @@ from src.models.sas.utils.utils import get_torch_device, get_output_name
 from src.runners.abstract_runnner import AbstractRunner
 from src.utils.enums import MovieLensDataset
 from src.utils.logger import Logger
-
+logger = logging.getLogger()
 
 class SasRunner(AbstractRunner):
     def __init__(self,
         debug: bool = False,
         save: bool = False,
-        log_dir: str = "../logs",
+        log_dir: str = "/home/hygo/Development/recommendations/exp/logs",
+        data_root: str = "/home/hygo/Development/recommendations/exp/data",
+        output_dir: str = "/home/hygo/Development/recommendations/exp/outputs",
         random_seed: int = 42,
         resume_dir: str = "",
         max_seq_len: int = 50,
         batch_size: int = 128,
-        data_root: str = "../data",
         hidden_dim: int = 50,
         num_blocks: int = 2,
         dropout_p: float = 0.5,
@@ -46,7 +48,6 @@ class SasRunner(AbstractRunner):
         warmup_ratio: float = 0.05,
         scheduler_type: str = "onecycle",
         resume_training: bool = False,
-        output_dir: str = "../outputs",
         mlflow_experiment: str = "sasrec-pytorch-experiments",
         mlflow_run_name: str = "",
     ):
@@ -80,29 +81,39 @@ class SasRunner(AbstractRunner):
         self.mlflow_experiment = mlflow_experiment
         self.mlflow_run_name = mlflow_run_name
         self.device = get_torch_device()
-        self.dataset_type: MovieLensDataset = MovieLensDataset.ML_100K
+        self.dataset_type: MovieLensDataset = MovieLensDataset.ML_1M
 
 
     def run(self) -> None:
         torch.manual_seed(self.random_seed)
-        mlflow.set_tracking_uri(uri="http://127.0.0.1:8080")
-
         mlflow.set_experiment(experiment_name=self.mlflow_experiment)
 
-        args = defaultdict(list)
 
         # Get timestamp.
         time_right_now = time.time()
         timestamp = datetime.fromtimestamp(time_right_now)
         timestamp = timestamp.strftime("%m-%d-%Y-%H%M")
-        args.timestamp = timestamp
 
         save_dir, log_filepath = self.setup_training_parameters(
             resume_training=False,
             output_dir=self.output_dir,
             log_dir=self.log_dir,
             timestamp=timestamp,
-            data_name=self.dataset_type.value,
+            data_name=self.dataset_type.name,
+        )
+
+        log_msg_format = (
+            "[%(asctime)s - %(levelname)s - %(filename)s: %(lineno)d] %(message)s"
+        )
+
+        handlers = [
+            logging.FileHandler(filename=log_filepath),
+            logging.StreamHandler(),
+        ]
+        logging.basicConfig(
+            format=log_msg_format,
+            level=logging.INFO,
+            handlers=handlers,
         )
 
         # ----------------- #
@@ -110,10 +121,9 @@ class SasRunner(AbstractRunner):
         dataset = Dataset(
             batch_size=self.batch_size,
             max_seq_len=self.max_seq_len,
-            dataset_type=MovieLensDataset.ML_100K,
+            dataset_type=self.dataset_type,
         )
 
-        args.num_items = dataset.num_items
 
         model = SASRec(
             num_items=dataset.num_items,

@@ -4,7 +4,13 @@ from typing import Dict, List
 
 import numpy as np
 import torch
+from torch.nn import functional as F
 from tqdm import tqdm
+
+
+InputSequences = torch.Tensor
+PositiveSamples = torch.Tensor
+NegativeSamples = torch.Tensor
 
 
 def get_positive2negatives(num_items: int, num_samples: int = 100) -> Dict[int, List[int]]:
@@ -106,3 +112,19 @@ def get_output_name(
     )
 
     return output_name
+
+def pad_or_truncate_seq(
+    sequence: List[int],
+    max_seq_len: int,
+) -> InputSequences:
+    """Pads or truncates sequences depending on max_seq_len."""
+    if isinstance(sequence, list):
+        sequence = torch.tensor(sequence)
+
+    if len(sequence) > max_seq_len:
+        sequence = sequence[-max_seq_len:]
+    else:
+        diff = max_seq_len - len(sequence)
+        sequence = F.pad(sequence, pad=(diff, 0))
+
+    return sequence
