@@ -16,6 +16,7 @@ class MovieLensType(Enum):
 class RunnerEventType(Enum):
     SAR = "sar"
     SAS = "sas"
+    SAS_REC = "sas_rec"
 
     @classmethod
     def value_of(cls, value):
@@ -28,3 +29,8 @@ class RunnerEventType(Enum):
 class ItemSimMeasure(Enum):
     SIM_COCCURRENCE = "cooccurrence"
     SIM_COSINE = "cosise"
+
+class TargetMetric(Enum):
+    HR = "HR"
+    MRR = "MRR"
+    NDCG = "NDCG"

@@ -3,5 +3,5 @@ from src.utils.enums import RunnerEventType
 
 if __name__ == "__main__":
     RunnerJob.do(
-        runner_type_str=RunnerEventType.SAS.value,
+        runner_type_str=RunnerEventType.SAS_REC.value,
     )

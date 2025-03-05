@@ -6,6 +6,7 @@ import scipy
 
 from src.jobs.job_executors.sar_job_executor import SarJobExecutor
 from src.jobs.job_executors.sas_job_executor import SasJobExecutor
+from src.jobs.job_executors.sas_rec_job_executor import SasRecJobExecutor
 from src.utils.logger import Logger
 from src.utils.enums import RunnerEventType
 from src.utils.enviroment import runner_type
@@ -29,6 +30,7 @@ class RunnerJob:
         executor_classes = {
             "sar": SarJobExecutor,
             "sas": SasJobExecutor,
+            "sas_rec": SasRecJobExecutor,
         }
 
         job_executors = [

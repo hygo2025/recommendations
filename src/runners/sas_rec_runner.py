@@ -6,248 +6,133 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Optional, Dict, Any, Union, Tuple
 
-import mlflow
+# import mlflow
 import numpy as np
 import torch
 from torch import optim
 
 from src.dataset.movielens.loader import Loader
+from src.models.evaluation import Evaluator
 from src.models.sas.dataset import Dataset
 from src.models.sas.sasrec import SASRec
 from src.models.sas.trainer import Trainer
 from src.models.sas.utils.utils import get_torch_device, get_output_name
+from src.models.sasrec.data.processor import prepare_data, get_sequence_length, DataSet
+from src.models.sasrec.learning import train_data_format, test_data_format
+from src.models.sasrec.m_model import train_validate
+from src.models.sasrec.utils import save_config, dump_trial_results
 from src.runners.abstract_runnner import AbstractRunner
-from src.utils.enums import MovieLensDataset
+from src.utils.enums import MovieLensDataset, TargetMetric
 from src.utils.logger import Logger
 logger = logging.getLogger()
 
 class SasRecRunner(AbstractRunner):
     def __init__(self,
-        debug: bool = False,
-        save: bool = False,
-        log_dir: str = "/home/hygo/Development/recommendations/exp/logs",
-        data_root: str = "/home/hygo/Development/recommendations/exp/data",
-        output_dir: str = "/home/hygo/Development/recommendations/exp/outputs",
-        random_seed: int = 42,
-        resume_dir: str = "",
-        max_seq_len: int = 50,
-        batch_size: int = 128,
-        hidden_dim: int = 50,
-        num_blocks: int = 2,
-        dropout_p: float = 0.5,
-        share_item_emb: bool = False,
-        lr: float = 0.001,
-        beta1: float = 0.9,
-        beta2: float = 0.999,
-        eps: float = 1e-8,
-        weight_decay: float = 0.0,
-        evaluate_k: int = 10,
-        num_epochs: int = 2000,
-        early_stop_epoch: int = 20,
-        use_scheduler: bool = False,
-        warmup_ratio: float = 0.05,
-        scheduler_type: str = "onecycle",
-        resume_training: bool = False,
-        mlflow_experiment: str = "sasrec-pytorch-experiments",
-        mlflow_run_name: str = "",
-    ):
-        self.logger = Logger.get_logger(name="SarRunner")
-        self.loader = Loader()
-        self.debug = debug
-        self.save = save
-        self.log_dir = log_dir
-        self.random_seed = random_seed
-        self.resume_dir = resume_dir
-        self.max_seq_len = max_seq_len
-        self.batch_size = batch_size
-        self.data_root = data_root
-        self.hidden_dim = hidden_dim
-        self.num_blocks = num_blocks
-        self.dropout_p = dropout_p
-        self.share_item_emb = share_item_emb
-        self.lr = lr
-        self.beta1 = beta1
-        self.beta2 = beta2
-        self.eps = eps
-        self.weight_decay = weight_decay
-        self.evaluate_k = evaluate_k
-        self.num_epochs = num_epochs
-        self.early_stop_epoch = early_stop_epoch
-        self.use_scheduler = use_scheduler
-        self.warmup_ratio = warmup_ratio
-        self.scheduler_type = scheduler_type
-        self.resume_training = resume_training
-        self.output_dir = output_dir
-        self.mlflow_experiment = mlflow_experiment
-        self.mlflow_run_name = mlflow_run_name
-        self.device = get_torch_device()
-        self.dataset_type: MovieLensDataset = MovieLensDataset.ML_1M
+                 model: str = 'sasrec',
+                 dataset: MovieLensDataset = MovieLensDataset.ML_1M,
+                 time_offset: float = 0.95,
+                 target_metric: TargetMetric = TargetMetric.NDCG,
+                 topn: int = 10,
+                 config_path: Optional[str] = None,
+                 exhaustive: bool = False,
+                 grid_steps: Optional[int] = None,  # 0 significa execução infinita; None usará o valor padrão
+                 check_best: bool = True,
+                 save_config: bool = True,
+                 dump_results: bool = False,
+                 es_tol: float = 0.001,
+                 es_max_steps: int = 2,
+                 next_item_only: bool = False,
+                 study_name: Optional[str] = None,
+                 storage: str = 'redis'  # Valores permitidos: 'sqlite' ou 'redis'
+                 ):
+        self.model = model
+        self.dataset = dataset
+        self.time_offset = time_offset
+        self.target_metric = target_metric
+        self.topn = topn
+        self.config_path = config_path
+        self.exhaustive = exhaustive
+        self.grid_steps = grid_steps
+        self.check_best = check_best
+        self.save_config = save_config
+        self.dump_results = dump_results
+        self.es_tol = es_tol
+        self.es_max_steps = es_max_steps
+        self.next_item_only = next_item_only
+        self.study_name = study_name
+        self.storage = storage
+
+    def run_experiment(self, datapack, config):
+        """
+        Executa o treinamento e avaliação do modelo utilizando os dados e a configuração fornecidos.
+
+        Args:
+            datapack: Dados de entrada para o experimento.
+            run_args: Parâmetros de execução (argumentos da linha de comando).
+            config: Dicionário com a configuração (hiperparâmetros e demais parâmetros).
+
+        Returns:
+            score: Valor do score obtido na métrica alvo.
+            results: Resultados completos da avaliação.
+            evaluator: Instância do avaliador (Evaluator) após a execução.
+        """
+        # Cria a instância do dataset e inicializa os formatos necessários
+        dataset = DataSet(
+            datapack,
+            name=self.dataset,
+            train_format=train_data_format(self.model),
+            test_format=test_data_format(self.next_item_only)
+        )
+        dataset.initialize_formats({'train': 'sequential'})
+        dataset.info()
+
+        # Prepara a rotina de treinamento do modelo
+        evaluator = Evaluator(dataset, self.topn)
+
+        logger.info(f'Starting training with configuration: {config}')
+        logger.info(f'Target metric: {self.target_metric.value.upper()}@{self.topn}')
+
+        # Executa o treinamento e avaliação
+        train_validate(config, evaluator)
+        # Recupera o score a partir dos resultados da avaliação
+        try:
+            best_results = evaluator.results['best']
+        except KeyError:
+            results = evaluator.most_recent_results
+        else:
+            results = evaluator.results[best_results['step']]
+        score = results.loc[f'{self.target_metric.value.upper()}@{self.topn}', 'score']
+
+        return score, results, evaluator
 
 
     def run(self) -> None:
-        torch.manual_seed(self.random_seed)
-        mlflow.set_experiment(experiment_name=self.mlflow_experiment)
+        ts = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+        study_name = f'{self.model}_{self.dataset}_{self.target_metric}_{ts}'
+        tune_datapack, test_datapack = prepare_data(self.dataset, time_offset_q=[self.time_offset] * 2)
+        config = return_config()
+        if config.get('maxlen') is None:
+            config['maxlen'] = get_sequence_length()
+
+        if self.save_config:
+            save_config(config=config, experiment_name=study_name)
+
+        score, results, evaluator = self.run_experiment(tune_datapack,  config)
+        logger.info(f"Training score: {score}")
+
+        # Caso a flag de teste esteja ativa, executa a avaliação no conjunto de teste
+        if self.check_best:
+            logger.info("Running test evaluation on best configuration...")
+            test_score, test_results, test_evaluator = self.run_experiment(test_datapack, config)
+            logger.info(f"Test results for the provided parameters:\n{test_results}")
+            logger.info(test_evaluator.results)
+            if self.dump_results:
+                dump_trial_results(test_evaluator.results, config, f'{study_name}_TEST')
+
+    pass
 
 
-        # Get timestamp.
-        time_right_now = time.time()
-        timestamp = datetime.fromtimestamp(time_right_now)
-        timestamp = timestamp.strftime("%m-%d-%Y-%H%M")
-
-        save_dir, log_filepath = self.setup_training_parameters(
-            resume_training=False,
-            output_dir=self.output_dir,
-            log_dir=self.log_dir,
-            timestamp=timestamp,
-            data_name=self.dataset_type.name,
-        )
-
-        log_msg_format = (
-            "[%(asctime)s - %(levelname)s - %(filename)s: %(lineno)d] %(message)s"
-        )
-
-        handlers = [
-            logging.FileHandler(filename=log_filepath),
-            logging.StreamHandler(),
-        ]
-        logging.basicConfig(
-            format=log_msg_format,
-            level=logging.INFO,
-            handlers=handlers,
-        )
-
-        # ----------------- #
-
-        dataset = Dataset(
-            batch_size=self.batch_size,
-            max_seq_len=self.max_seq_len,
-            dataset_type=self.dataset_type,
-        )
-
-
-        model = SASRec(
-            num_items=dataset.num_items,
-            num_blocks=self.num_blocks,
-            hidden_dim=self.hidden_dim,
-            max_seq_len=self.max_seq_len,
-            dropout_p=self.dropout_p,
-            share_item_emb=self.share_item_emb,
-            device=self.device,
-        )
-
-        model = model.to(self.device)
-
-
-        optimizer = optim.Adam(
-            params=model.parameters(),
-            lr=self.lr,
-            betas=(self.beta1, self.beta2),
-            eps=self.eps,
-            weight_decay=self.weight_decay,
-        )
-
-        trainer = Trainer(
-            dataset=dataset,
-            model=model,
-            optimizer=optimizer,
-            device=self.device,
-            evaluate_k=self.evaluate_k,
-            max_lr=self.lr,
-            num_epochs=self.num_epochs,
-            early_stop_epoch=self.early_stop_epoch,
-            use_scheduler=self.use_scheduler,
-            warmup_ratio=self.warmup_ratio,
-            scheduler_type=self.scheduler_type,
-            resume_training=self.resume_training,
-            save_dir=save_dir,
-        )
-
-        mlflow.end_run()
-
-        with mlflow.start_run(run_name=self.mlflow_run_name):
-            mlflow.log_artifact(local_path=log_filepath, artifact_path="logs")
-            best_results = trainer.train()
-            best_ndcg_epoch, best_model_state_dict, _ = best_results
-
-            # Perform test.
-            model.load_state_dict(best_model_state_dict)
-            self.logger.info(f"Testing with model checkpoint from epoch {best_ndcg_epoch}...")
-            test_ndcg, test_hit_rate = trainer.evaluate(mode="test", model=model)
-
-            test_ndcg_msg = f"Test nDCG@{self.evaluate_k} is {test_ndcg: 0.6f}."
-            test_hit_msg = f"Test Hit@{self.evaluate_k} is {test_hit_rate: 0.6f}."
-            test_result_msg = "\n".join([test_ndcg_msg, test_hit_msg])
-            self.logger.info(f"\n{test_result_msg}")
-
-
-    def setup_training_parameters(
-            self,
-            resume_training: bool,
-            output_dir: str,
-            log_dir: str,
-            timestamp: str,
-            data_name: str,
-            resume_dir: Optional[str] = None,
-    ) -> Tuple[str, str]:
-        """
-        Configura os diretórios de salvamento e log para o treinamento.
-
-        Se o treinamento está sendo retomado, utiliza o diretório informado (ou o mais recente encontrado)
-        para definir o caminho de salvamento e log. Caso contrário, gera um novo nome de saída, cria os diretórios
-        necessários e salva os parâmetros em um arquivo 'args.json'.
-
-        Retorna:
-            Tuple[str, str]: Caminho de salvamento e caminho do log.
-        """
-        if resume_training:
-            if resume_dir:
-                log_filepath = f"{resume_dir.replace(output_dir, log_dir)}.log"
-                return resume_dir, log_filepath
-            else:
-                # Procura pelo diretório mais recente em output_dir que contenha data_name
-                relevant_files = [f for f in os.listdir(output_dir) if data_name in f]
-                if not relevant_files:
-                    raise ValueError("Nenhum diretório relevante encontrado em output_dir para o data_name informado.")
-                timestamps = [f.split("_")[-1] for f in relevant_files]
-                timestamp_objs = [
-                    datetime.strptime(ts, "%m-%d-%Y-%H%M").timestamp() for ts in timestamps
-                ]
-                most_recent_ts_idx = int(np.argmax(timestamp_objs))
-                resume_dir_found = relevant_files[most_recent_ts_idx]
-                full_resume_dir = os.path.join(output_dir, resume_dir_found)
-                log_filepath = os.path.join(log_dir, f"{resume_dir_found}.log")
-                return full_resume_dir, log_filepath
-
-        else:
-            os.makedirs(log_dir, exist_ok=True)
-            # Gera o nome de saída usando a função get_output_name (que depende dos parâmetros do objeto)
-            output_name = get_output_name(
-                data_filename=data_name,
-                lr=self.lr,
-                batch_size=self.batch_size,
-                early_stop_epoch=self.early_stop_epoch,
-                num_epochs=self.num_epochs,
-                random_seed=self.random_seed,
-                timestamp=timestamp
-            )
-            log_filename = f"{output_name}.log"
-            log_filepath = os.path.join(log_dir, log_filename)
-            save_dir = os.path.join(output_dir, output_name)
-            os.makedirs(save_dir, exist_ok=True)
-
-            # Salva os parâmetros em um arquivo JSON
-            args_save_filename = os.path.join(save_dir, "args.json")
-            params = {
-                "output_dir": output_dir,
-                "log_dir": log_dir,
-                "mlflow_run_name": output_name,
-                "log_filepath": log_filepath,
-                "save_dir": save_dir,
-                "data_name": data_name
-            }
-            with open(args_save_filename, "w") as f:
-                json.dump(params, f, indent=2)
-
-            return save_dir, log_filepath
-
-
+def return_config() -> dict:
+    return {'batch_size': 256, 'learning_rate': 0.005, 'hidden_units': 128, 'num_blocks': 3, 'dropout_rate': 0.2,
+     'num_heads': 1, 'l2_emb': 0.0, 'maxlen': 200, 'batch_quota': None, 'seed': 0, 'sampler_seed': 789, 'device': None,
+     'max_epochs': 4}

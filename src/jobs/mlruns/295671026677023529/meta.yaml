@@ -1,6 +1,0 @@
-artifact_location: file:///home/hygo/Development/recommendations/src/jobs/mlruns/295671026677023529
-creation_time: 1741182938572
-experiment_id: '295671026677023529'
-last_update_time: 1741182938572
-lifecycle_stage: active
-name: sasrec-pytorch-experiments

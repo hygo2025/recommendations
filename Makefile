@@ -1,4 +1,4 @@
-PYTHON_VERSION = 3.8.10
+PYTHON_VERSION = 3.9
 VENV_DIR = .local
 REQUIREMENTS_FILE = requirements.txt
 ACTIVATE = . $(VENV_DIR)/bin/activate
@@ -46,32 +46,6 @@ clean:
 remove: clean
 	rm -f $(REQUIREMENTS_FILE)
 
-run:
-	$(ACTIVATE) && python3 src/jobs/loaders/run.py
-
-docker_build_nocache:
-	docker build --progress=plain --no-cache -t nrec-worker .
-
-docker_build:
-	docker build -t nrec-worker .
-
-docker_without_stop:
-	docker run --rm --entrypoint /bin/sh nrec-worker -c "tail -f /dev/null"
-
-docker_submit:
-	docker run --rm \
-		-e ENV=prod \
-		-v ./:/app \
-		--entrypoint /bin/sh \
-		nrec-worker \
-		-c "/opt/spark/bin/spark-submit \
-		--conf spark.driver.extraClassPath=/opt/spark/lib-jars/* \
-		--conf spark.executor.extraClassPath=/opt/spark/lib-jars/* \
-		--conf spark.submit.pyFiles=/app/src/* \
-		local:///app/src/runner.py"
-
-format:
-	$(ACTIVATE) && python3 -m black src
 
 
-.PHONY: install update clean remove run_local run docker_build docker_without_stop docker_run docker_submit format
+.PHONY: install update clean remove

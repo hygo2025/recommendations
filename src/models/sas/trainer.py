@@ -3,7 +3,7 @@ import logging
 import os
 from typing import OrderedDict
 
-import mlflow
+# import mlflow
 import numpy as np
 import torch
 from torch import nn
@@ -223,7 +223,7 @@ class Trainer:
                     optim_state_dict=best_optim_state_dict,
                     scheduler_state_dict=best_scheduler_state_dict,
                 )
-                mlflow.log_artifact(local_path=self.save_dir)
+                # mlflow.log_artifact(local_path=self.save_dir)
 
             if hit >= best_hit_rate:
                 best_hit_rate = hit
@@ -242,10 +242,10 @@ class Trainer:
                 f"nDCG-{self.evaluate_k}": ndcg,
                 f"Hit-{self.evaluate_k}": hit,
             }
-            mlflow.log_metrics(
-                metrics=metrics,
-                step=epoch,
-            )
+            # mlflow.log_metrics(
+            #     metrics=metrics,
+            #     step=epoch,
+            # )
 
             most_recent_model = self.model.state_dict()
             most_recent_optim = self.optimizer.state_dict()
@@ -262,7 +262,7 @@ class Trainer:
                 scheduler_state_dict=most_recent_scheduler,
                 save_name="most_recent",
             )
-            mlflow.log_artifact(local_path=self.save_dir)
+            # mlflow.log_artifact(local_path=self.save_dir)
 
             # Early stopping.
             if epoch - best_ndcg_epoch == self.early_stop_epoch:
