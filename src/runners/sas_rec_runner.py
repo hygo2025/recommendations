@@ -1,29 +1,17 @@
-import json
 import logging
-import os
-import time
-from collections import defaultdict
 from datetime import datetime
-from typing import Optional, Dict, Any, Union, Tuple
+from typing import Optional
 
 # import mlflow
-import numpy as np
-import torch
-from torch import optim
 
-from src.dataset.movielens.loader import Loader
 from src.models.evaluation import Evaluator
-from src.models.sas.dataset import Dataset
-from src.models.sas.sasrec import SASRec
-from src.models.sas.trainer import Trainer
-from src.models.sas.utils.utils import get_torch_device, get_output_name
 from src.models.sasrec.data.processor import prepare_data, get_sequence_length, DataSet
 from src.models.sasrec.learning import train_data_format, test_data_format
 from src.models.sasrec.m_model import train_validate
 from src.models.sasrec.utils import save_config, dump_trial_results
 from src.runners.abstract_runnner import AbstractRunner
 from src.utils.enums import MovieLensDataset, TargetMetric
-from src.utils.logger import Logger
+
 logger = logging.getLogger()
 
 class SasRecRunner(AbstractRunner):
