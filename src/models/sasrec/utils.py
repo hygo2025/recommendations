@@ -47,24 +47,6 @@ def reindex(raw_data, index, filter_invalid=True, names=None):
     return new_data
 
 
-def matrix_from_observations(data: pd.DataFrame, userid: str, itemid: str, dtype=None):
-    useridx = data[userid]
-    itemidx = data[itemid]
-    values = np.ones_like(useridx)
-    if dtype is None:
-        dtype = 'f8'
-    return csr_matrix((values, (useridx, itemidx)), dtype=dtype)
-
-def to_numba_dict(data: Union[dict, pd.Series]):
-    numba_data = Dict.empty(
-        key_type=types.int64, # userid
-        value_type=types.int32[:], # items
-    )
-    for userid, items in data.items():
-        numba_data[userid] = np.array(items, dtype=np.int32)
-    return numba_data
-
-
 
 def save_config(config: dict, experiment_name: str) -> None:
     """

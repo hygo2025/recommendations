@@ -6,12 +6,12 @@ import numpy as np
 import pandas as pd
 
 from src.models.sasrec import defaults
-from src.models.sasrec.utils import matrix_from_observations, to_numba_dict, reindex
+from src.models.sasrec.utils import reindex
 from src.utils.logger import Logger
 from . import movielens as ml
 
 class DataSet:
-    def __init__(self, datapack, train_format=None, test_format=None, is_persistent=True, name=None):
+    def __init__(self, datapack, train_format='sequential_packed', test_format='sequential', is_persistent=True, name=None):
         train, test, index = datapack
         self._index = index
         self._data_container = {
@@ -22,7 +22,6 @@ class DataSet:
         }
         self.default_formats = {'train': train_format, 'test': test_format}
         self._format_kwargs = {}
-        self._data_formatter = DataFormatter
         self.is_persistent = is_persistent # cache calculated data formats
         self.initialize_formats(self.default_formats)
         self.name = name if name is not None else self.__class__.__name__
@@ -50,20 +49,25 @@ class DataSet:
         return self.get_formatted_data('test', self.default_formats['test'])
 
     def get_formatted_data(self, mode, format=None):
-        if format is None:
-            format = 'default'
-        format_kwargs = {}
-        if isinstance(format, (tuple, list)):
-            format, format_kwargs = format
-            self._format_kwargs[format] = format_kwargs
         data_container = self._data_container.setdefault(format, {})
-        try:
+        if mode in data_container:
             formatted_data = data_container[mode]
-        except KeyError: # no data in this format -> generate it from defaults
-            data_formatter = self._data_formatter(format)
-            formatted_data = data_formatter(self, mode, **format_kwargs)
+        else:
+            data = self._data_container['default'][mode]
+            userid = self.user_index.name
+            itemid = self.item_index.name
+            timeid = defaults.timeid
+
+            if format == 'sequential':
+                formatted_data = dataframe_to_sequences(data, userid, itemid, timeid)
+            elif format == 'sequential_packed':
+                formatted_data = dataframe_to_packed_sequences(data, userid, itemid, timeid)
+            else:
+                raise NotImplementedError(f'Unrecognized format: {format}')
+
             if self.is_persistent:
                 data_container[mode] = formatted_data
+
         return formatted_data
 
     @contextmanager
@@ -79,14 +83,6 @@ class DataSet:
             yield self
         finally: # restore initial values
             self.default_formats = {'train': train_format, 'test': test_format}
-
-    def has_formats(self, train=None, test=None):
-        train_format = train or self.default_formats['train']
-        test_format = test or self.default_formats['test']
-
-        train_format_exists = self.format_exists('train', train_format)
-        test_format_exists = self.format_exists('test', test_format)
-        return train_format_exists and test_format_exists
 
     def format_exists(self, mode, format):
         try:
@@ -108,60 +104,9 @@ class DataSet:
             f'between {test_stats[userid]} users and {test_stats[itemid]} items.'
         )
 
-    def cleanup(self, formats=None):
-        if formats is None:
-            formats = self._data_container.keys()
-            formats = list(formats)
-        if not isinstance(formats, (list, set, tuple)):
-            formats = [formats]
-        for format in formats:
-            if format != 'default': # leave source data intact
-                del self._data_container[format]
-
-
-class DataFormatter:
-    def __init__(self, format):
-        self._formatters = {
-            'sparse': dataframe_to_matrix,
-            'sequential': dataframe_to_sequences,
-            'sequential_packed': dataframe_to_packed_sequences,
-            'sequential_typed': dataframe_to_typed_sequences,
-            'interactions': dataframe_to_interactions
-        }
-        self._target_format = format
-
-    def __call__(self, dataset, mode, **kwargs):
-        return self.format(dataset, mode, **kwargs)
-
-    def format(self, dataset, mode, **kwargs):
-        try:
-            formatter = self._formatters[self._target_format]
-        except KeyError:
-            raise NotImplementedError(f'Unrecognized format: {self._target_format}')
-        data = dataset._data_container['default'][mode]
-        userid = dataset.user_index.name
-        itemid = dataset.item_index.name
-        timeid = defaults.timeid
-        return formatter(data, userid, itemid, timeid, **kwargs)
-
-    def register(self, format, formatter):
-        self._formatters[format] = formatter
-
-
-def dataframe_to_matrix(data, userid, itemid, timeid=None):
-    '''Convert observations dataframe into a sparse user-item matrix.'''
-    return matrix_from_observations(data, userid, itemid)
-
-
 def dataframe_to_sequences(data, userid, itemid, timeid):
     '''Convert observations dataframe into a user-keyed series of lists of item sequences.'''
     return data.sort_values(timeid).groupby(userid, sort=False)[itemid].apply(list)
-
-
-def dataframe_to_typed_sequences(data, userid, itemid, timeid):
-    sequences = dataframe_to_sequences(data, userid, itemid, timeid)
-    return to_numba_dict(sequences)
-
 
 def dataframe_to_packed_sequences(data, userid, itemid, timeid):
     sequences = data.sort_values(timeid).groupby(userid, sort=True)[itemid].apply(list)
@@ -172,34 +117,6 @@ def dataframe_to_packed_sequences(data, userid, itemid, timeid):
     sizes[1:] = sequences.apply(len).cumsum().values
     indices = np.concatenate(sequences.to_list(), dtype=np.int32)
     return indices, sizes
-
-
-def dataframe_to_interactions(
-    data, userid, itemid, timeid,
-    stepwise=False, max_steps=10, min_step_users=100
-):
-    '''Return user-item interactions either as an iterable or as a stepwise data.
-    In the latter case, each step is a sequence of users with their next item.'''
-    data_sorted = data[[userid, itemid, timeid]].sort_values(timeid)
-    if not stepwise:
-        return data_sorted[[userid, itemid]] # omit time
-    return (
-            data_sorted
-            .assign(step = lambda df:
-                df
-                .groupby([userid], sort=False)[timeid]
-                .transform('cumcount')
-            )
-            .groupby('step')[[userid, itemid]]  # omit time
-            .apply(lambda x: list(x.itertuples(index=False, name=None))) # list (user,item) pairs
-            .loc[lambda x: x.apply(len) >= min_step_users]
-            .iloc[:max_steps] # `None` will not filter anything
-            .sort_index()
-        )
-
-
-def get_sequence_length():
-    return defaults.sequence_length_movies
 
 
 def prepare_data(dataset_name, time_offset_q=None):

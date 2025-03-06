@@ -6,8 +6,8 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from src.models.base import RecommenderModel
 from src.models.sasrec.data.processor import DataSet
+from src.models.sasrec.m_model.sasrec_recommender import SASRecModel
 
 
 class Evaluator:
@@ -26,7 +26,7 @@ class Evaluator:
     
     def submit(
         self,
-        model: RecommenderModel,
+        model: SASRecModel,
         step: Optional[int] = None,
         args: Optional[tuple] = ()
     ) -> None:
@@ -53,7 +53,7 @@ class Evaluator:
         return self._results[self._last_used_key]
 
 
-def evaluate(model: RecommenderModel, dataset: DataSet, topn: int):
+def evaluate(model: SASRecModel, dataset: DataSet, topn: int):
     with dataset.formats(train='sequential'): # model may have used a different format - restoring
         train_data = dataset.train
     test_data = dataset.test
@@ -77,7 +77,7 @@ def evaluate(model: RecommenderModel, dataset: DataSet, topn: int):
     return averaged_results
 
 
-def evaluate_step(model: RecommenderModel, train: dict, test_seq: Iterable, topn: int):
+def evaluate_step(model: SASRecModel, train: dict, test_seq: Iterable, topn: int):
     results = []
     unique_recommendations = set()
     seen_test = defaultdict(list)

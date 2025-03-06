@@ -1,27 +1,17 @@
 from functools import partial
+from typing import Any, Optional, Union
 
 import numpy as np
 import torch
 
-from .source import SASRec
-from .sampler import packed_sequence_batch_sampler
-from ..learning import trainer
+from .sasrec_module import SASRec
 
-from ..utils import fix_torch_seed, get_torch_device
-from ...base import RecommenderModel
-from ...evaluation import Evaluator
+from ..utils import get_torch_device, topidx
 
+class InvalidInputData(Exception): pass
+# dataframe_to_packed_sequences dataframe_to_sequences
 
-def train_validate(config: dict, evaluator: Evaluator):
-    dataset = evaluator.dataset
-    n_items = len(dataset.item_index)
-    fix_torch_seed(config.get('seed', None))
-    model = SASRecModel(config, n_items)
-    model.fit(dataset.train, evaluator)
-    return model
-
-
-class SASRecModel(RecommenderModel):
+class SASRecModel:
     def __init__(self, config: dict, n_items: int):
         self.n_items = n_items
         self.config = config
@@ -38,22 +28,36 @@ class SASRecModel(RecommenderModel):
     def model(self):
         return self._model
 
-    def fit(self, data: tuple, evaluator: Evaluator):
-        indices, sizes = data
-        self.sampler = packed_sequence_batch_sampler(
-            indices, sizes, self.n_items,
-            batch_size = self.config['batch_size'],
-            maxlen = self.config['maxlen'],
-            seed = self.config['sampler_seed'],
-        )
-        self.n_batches = (len(sizes) - 1) // self.config['batch_size']
-        trainer(self, evaluator)
+    def recommend(self, seen_seq: Union[list, np.ndarray], topn: int, *, user: Optional[int] = None):
+        '''Given an item sequence, predict top-n candidates for the next item.'''
+        predictions = self.predict(seen_seq, user=user)
+        np.put(predictions, seen_seq, -np.inf)
+        predicted_items = topidx(predictions, topn)
+        return predicted_items
 
-    def train_epoch(self):
+    def recommend_sequential(
+        self,
+        target_seq: Union[list, np.ndarray],
+        seen_seq: Union[list, np.ndarray],
+        topn: int,
+        *,
+        user: Optional[int] = None
+    ):
+        '''Given an item sequence and a sequence of next target items,
+        predict top-n candidates for each next step in the target sequence.
+        '''
+        predictions = self.predict_sequential(target_seq[:-1], seen_seq, user=user)
+        predictions[:, seen_seq] = -np.inf
+        for k in range(1, predictions.shape[0]):
+            predictions[k, target_seq[:k]] = -np.inf
+        predicted_items = np.apply_along_axis(topidx, 1, predictions, topn)
+        return predicted_items
+
+    def train_epoch(self, sampler, n_batches):
         model = self.model
         pad_token = model.pad_token
-        criterion, optimizer, sampler, device, n_batches = [
-            getattr(self, a) for a in ['criterion', 'optimizer', 'sampler', 'device', 'n_batches']
+        criterion, optimizer, device = [
+            getattr(self, a) for a in ['criterion', 'optimizer', 'device']
         ]
         l2_emb = self.config['l2_emb']
         as_tensor = partial(torch.as_tensor, dtype=torch.int32, device=device)

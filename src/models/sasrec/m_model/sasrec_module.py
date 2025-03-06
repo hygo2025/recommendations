@@ -2,21 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-
-class PointWiseFeedForward(nn.Module):
-    def __init__(self, hidden_units, dropout_rate):
-        super().__init__()
-        self.conv1 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
-        self.dropout1 = nn.Dropout(p=dropout_rate)
-        self.relu = nn.ReLU()
-        self.conv2 = nn.Conv1d(hidden_units, hidden_units, kernel_size=1)
-        self.dropout2 = nn.Dropout(p=dropout_rate)
-
-    def forward(self, inputs):
-        outputs = self.dropout2(self.conv2(self.relu(self.dropout1(self.conv1(inputs.transpose(-1, -2))))))
-        outputs = outputs.transpose(-1, -2) # as Conv1D requires (N, C, Length)
-        outputs += inputs
-        return outputs
+from src.models.sasrec.m_model.point_wise_feed_foward import PointWiseFeedForward
 
 
 class SASRec(nn.Module):
@@ -95,39 +81,3 @@ class SASRec(nn.Module):
         pos_logits = (log_feats * pos_embs).sum(dim=-1)
         neg_logits = (log_feats * neg_embs).sum(dim=-1)
         return pos_logits, neg_logits
-
-
-def batch_sequence_sampler(user_train, n_items, batch_size, maxlen, seed, pad_token=None):
-    if pad_token is None:
-        pad_token = n_items
-    
-    n_users = len(user_train)
-    def sample(random_state):
-        user = random_state.randint(n_users)
-        user_items = user_train[user]
-        seq = np.full(maxlen, pad_token, dtype=np.int32)
-        pos = np.full(maxlen, pad_token, dtype=np.int32)
-        neg = np.full(maxlen, pad_token, dtype=np.int32)
-        nxt = user_items[-1]
-        idx = maxlen - 1
-        ts = set(user_items)
-        for i in reversed(user_items[:-1]):
-            seq[idx] = i
-            pos[idx] = nxt
-            neg[idx] = random_neq(n_items, ts, random_state)
-            nxt = i
-            idx -= 1
-            if idx == -1:
-                break
-        return (user, seq, pos, neg)
-    
-    random_state = np.random.RandomState(seed)
-    while True:
-        yield zip(*(sample(random_state) for _ in range(batch_size)))
-
-
-def random_neq(n, s, random_state):
-    t = random_state.randint(n)
-    while t in s:
-        t = random_state.randint(n)
-    return t
