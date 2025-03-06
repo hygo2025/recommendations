@@ -232,7 +232,7 @@ class SasRecRunner(AbstractRunner):
             # Exemplo de recomendação para um usuário (usando o primeiro usuário do dataset de teste)
             try:
                 sample_user = test_dataset.user_index[0]
-                recommendations = best_model.recommend(sample_user, self.topn)
+                recommendations = best_model.recommend(sample_user, self.topn) #TODO Aqui ta dando erro
                 self.logger.info(f"Recomendações para o usuário {sample_user}: {recommendations}")
             except Exception as e:
                 self.logger.error(f"Erro ao gerar recomendação de exemplo: {e}")
