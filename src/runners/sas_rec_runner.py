@@ -67,6 +67,28 @@ class SasRecRunner(AbstractRunner):
         self.storage = storage
         self.logger = Logger.get_logger("SasRecRunner")
 
+    def _load_adjusted_state_dict(self, model, state_dict):
+        """
+        Ajusta o state_dict para que o tamanho do embedding de itens seja compatível com o modelo atual.
+        Caso haja size mismatch na chave 'item_emb.weight', os pesos do checkpoint serão copiados para os índices correspondentes
+        e os itens extras manterão os pesos iniciais.
+        """
+        key = "item_emb.weight"
+        if key in state_dict:
+            ckpt_weight = state_dict[key]
+            current_weight = model.item_emb.weight
+            if ckpt_weight.shape != current_weight.shape:
+                self.logger.info(
+                    f"Ajustando tamanho do '{key}': checkpoint {ckpt_weight.shape} -> atual {current_weight.shape}"
+                )
+                # Cria uma nova matriz com os pesos atuais
+                new_weight = current_weight.data.clone()
+                n_copy = min(ckpt_weight.shape[0], current_weight.shape[0])
+                new_weight[:n_copy] = ckpt_weight[:n_copy]
+                state_dict[key] = new_weight
+        # Carrega o state_dict ajustado de forma estrita (agora devem bater as dimensões)
+        model.load_state_dict(state_dict, strict=True)
+
     def _train_model(self, datapack, config):
         """
         Treina o modelo no conjunto de dados de treino/validação e retorna:
@@ -165,8 +187,8 @@ class SasRecRunner(AbstractRunner):
         dataset.info()
         evaluator = Evaluator(dataset, self.topn)
         n_items = len(dataset.item_index)
-        model = SASRecModel(config, n_items)
-        model.model.load_state_dict(model_state) #TODO: Dando erro
+        model = SASRecModel(config, n_items)    # Ajusta e carrega o state_dict
+        self._load_adjusted_state_dict(model.model, model_state)
         self.logger.info("Iniciando avaliação no conjunto de teste...")
         evaluator.submit(model, step=0, args=(None,))
         results = evaluator.most_recent_results
