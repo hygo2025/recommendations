@@ -15,39 +15,6 @@ def topidx(arr, topn):
     parted = np.argpartition(arr, -topn)[-topn:]
     return parted[np.argsort(-arr[parted])]
 
-def reindex(raw_data, index, filter_invalid=True, names=None):
-    '''
-    Factorizes column values based on provided pandas index. Allows resetting
-    index names. Optionally drops rows with entries not present in the index.
-    '''
-    if isinstance(index, pd.Index):
-        index = [index]
-
-    if isinstance(names, str):
-        names = [names]
-
-    if isinstance(names, (list, tuple, pd.Index)):
-        for i, name in enumerate(names):
-            index[i].name = name
-
-    new_data = raw_data.assign(**{
-        idx.name: idx.get_indexer(raw_data[idx.name]) for idx in index
-    })
-
-    if filter_invalid:
-        # pandas returns -1 if label is not present in the index
-        # checking if -1 is present anywhere in data
-        maybe_invalid = new_data.eval(
-            ' or '.join([f'{idx.name} == -1' for idx in index])
-        )
-        if maybe_invalid.any():
-            print(f'Filtered {maybe_invalid.sum()} invalid observations.')
-            new_data = new_data.loc[~maybe_invalid]
-
-    return new_data
-
-
-
 def save_config(config: dict, experiment_name: str) -> None:
     """
     Salva a configuração do experimento em um arquivo.

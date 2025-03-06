@@ -6,7 +6,8 @@ from tqdm import tqdm
 
 from src.models.evaluation import Evaluator
 from src.models.sasrec import defaults
-from src.models.sasrec.data.processor import prepare_data, DataSet
+from src.models.sasrec.data.movielens_data_setup import MovieLensDataSetup
+from src.models.sasrec.data.processor import DataSet
 from src.models.sasrec.m_model.sampler import packed_sequence_batch_sampler
 from src.models.sasrec.m_model.sasrec_recommender import SASRecModel
 from src.models.sasrec.utils import save_config, dump_trial_results, fix_torch_seed
@@ -127,7 +128,8 @@ class SasRecRunner(AbstractRunner):
     def run(self) -> None:
         ts = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         study_name = f'{self.model}_{self.dataset}_{self.target_metric}_{ts}'
-        tune_datapack, test_datapack = prepare_data(self.dataset, time_offset_q=[self.time_offset] * 2)
+        tune_datapack, test_datapack = MovieLensDataSetup(self.dataset, time_offset_q=[self.time_offset] * 2).prepare_data()
+
         config = return_config()
         if config.get('maxlen') is None:
             config['maxlen'] = defaults.sequence_length_movies
