@@ -1,8 +1,11 @@
+import copy
 import logging
+import torch
 from datetime import datetime
 from typing import Optional
 
 from tqdm import tqdm
+import numpy as np
 
 from src.models.evaluation import Evaluator
 from src.models.sasrec import defaults
@@ -22,8 +25,9 @@ class TrialStopException(Exception):
         self.message = f'Stopping the trial. Reason: {self.__class__.__name__}'
         super().__init__(self.message)
 
-class EarlyStopping(TrialStopException): pass
 
+class EarlyStopping(TrialStopException):
+    pass
 
 
 class SasRecRunner(AbstractRunner):
@@ -63,8 +67,17 @@ class SasRecRunner(AbstractRunner):
         self.storage = storage
         self.logger = Logger.get_logger("SasRecRunner")
 
-    def run_experiment(self, datapack, config):
-        # Cria a instância do dataset e inicializa os formatos necessários
+    def _train_model(self, datapack, config):
+        """
+        Treina o modelo no conjunto de dados de treino/validação e retorna:
+         - best_model_state: pesos do melhor modelo (usando deep copy)
+         - score: score obtido com o target metric no melhor ponto de validação
+         - results: resultados completos da última avaliação
+         - evaluator: instância do avaliador utilizada
+         - n_items: número de itens (para criação do modelo)
+         - dataset: instância do MovielensDataSet utilizada
+        """
+        # Instancia o dataset e inicializa os formatos
         dataset = MovielensDataSet(
             datapack,
             dataset_name=self.dataset,
@@ -74,18 +87,13 @@ class SasRecRunner(AbstractRunner):
         dataset.initialize_formats({'train': 'sequential'})
         dataset.info()
 
-        # Prepara a rotina de treinamento do modelo
         evaluator = Evaluator(dataset, self.topn)
+        self.logger.info(f"Starting training with configuration: {config}")
+        self.logger.info(f"Target metric: {self.target_metric.value.upper()}@{self.topn}")
 
-        self.logger.info(f'Starting training with configuration: {config}')
-        self.logger.info(f'Target metric: {self.target_metric.value.upper()}@{self.topn}')
-
-        # Executa o treinamento e avaliação
-        dataset = evaluator.dataset
         n_items = len(dataset.item_index)
         fix_torch_seed(config.get('seed', None))
         model = SASRecModel(config, n_items)
-
 
         indices, sizes = dataset.train
         sampler = packed_sequence_batch_sampler(
@@ -98,37 +106,80 @@ class SasRecRunner(AbstractRunner):
 
         max_epochs = config['max_epochs']
         validation_interval = defaults.validation_interval
-        assert validation_interval <= max_epochs, 'Number of epochs is too small. Won\'t validate.'
-        # TODO warn if max_epochs % validation_interval != 0
+        if validation_interval > max_epochs:
+            raise ValueError("Número de épocas é muito pequeno para realizar validação.")
 
-        pbar = tqdm(range(max_epochs), leave=False )
+        best_score = -np.inf
+        best_epoch = None
+        best_model_state = None
 
-        for epoch in pbar:
-            pbar.set_description(f"Processando época {epoch} de {max_epochs}")
+        for epoch in range(max_epochs):
+            self.logger.info(f"Processando época {epoch + 1}/{max_epochs}")
             loss = model.train_epoch(sampler, n_batches)
             if (epoch + 1) % validation_interval == 0:
                 try:
                     evaluator.submit(model, step=epoch, args=(loss,))
+                    # Recupera os resultados da avaliação recente
+                    curr_results = evaluator.most_recent_results
+                    curr_score = curr_results.loc[f'{self.target_metric.value.upper()}@{self.topn}', 'score']
+                    self.logger.info(f"Época {epoch + 1}: Loss = {loss:.4f}, Validação = {curr_score:.4f}")
+                    if curr_score > best_score:
+                        best_score = curr_score
+                        best_epoch = epoch
+                        best_model_state = copy.deepcopy(model.model.state_dict())
+                        self.logger.info(f"Melhor modelo atualizado na época {epoch + 1} com score {curr_score:.4f}")
                 except EarlyStopping:
+                    self.logger.info("Early stopping acionado.")
                     break
 
+        if best_model_state is None:
+            self.logger.warning("Nenhum modelo foi salvo durante o treinamento; usando o estado final do modelo.")
+            best_model_state = model.model.state_dict()
 
-        # Recupera o score a partir dos resultados da avaliação
+        # Tenta recuperar os resultados associados ao melhor modelo
         try:
             best_results = evaluator.results['best']
+            results = evaluator.results[best_results['step']]
         except KeyError:
             results = evaluator.most_recent_results
-        else:
-            results = evaluator.results[best_results['step']]
+
         score = results.loc[f'{self.target_metric.value.upper()}@{self.topn}', 'score']
+        return best_model_state, score, results, evaluator, n_items, dataset
 
-        return score, results, evaluator
-
+    def _evaluate_model(self, datapack, config, model_state):
+        """
+        Avalia o modelo no conjunto de teste.
+        Retorna:
+         - score: score obtido no conjunto de teste
+         - results: resultados completos da avaliação
+         - evaluator: instância do avaliador utilizada
+         - dataset: instância do MovielensDataSet utilizada
+         - model: o modelo carregado com os melhores pesos
+        """
+        dataset = MovielensDataSet(
+            datapack,
+            dataset_name=self.dataset,
+            train_format='sequential_packed',
+            test_format='sequential'
+        )
+        dataset.info()
+        evaluator = Evaluator(dataset, self.topn)
+        n_items = len(dataset.item_index)
+        model = SASRecModel(config, n_items)
+        model.model.load_state_dict(model_state) #TODO: Dando erro
+        self.logger.info("Iniciando avaliação no conjunto de teste...")
+        evaluator.submit(model, step=0, args=(None,))
+        results = evaluator.most_recent_results
+        score = results.loc[f'{self.target_metric.value.upper()}@{self.topn}', 'score']
+        return score, results, evaluator, dataset, model
 
     def run(self) -> None:
         ts = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
         study_name = f'{self.model}_{self.dataset}_{self.target_metric}_{ts}'
-        tune_datapack, test_datapack = MovieLensDataSetup(self.dataset, time_offset_q=[self.time_offset] * 2).prepare_data()
+        # Prepara os conjuntos de dados (treino/validação e teste)
+        tune_datapack, test_datapack = MovieLensDataSetup(
+            self.dataset, time_offset_q=[self.time_offset] * 2
+        ).prepare_data()
 
         config = return_config()
         if config.get('maxlen') is None:
@@ -137,23 +188,39 @@ class SasRecRunner(AbstractRunner):
         if self.save_config:
             save_config(config=config, experiment_name=study_name)
 
-        score, results, evaluator = self.run_experiment(tune_datapack,  config)
-        self.logger.info(f"Training score: {score}")
+        # Fase de treinamento
+        best_model_state, train_score, train_results, train_evaluator, n_items, train_dataset = self._train_model(tune_datapack, config)
+        self.logger.info(f"Score de treinamento: {train_score:.4f}")
 
-        # Caso a flag de teste esteja ativa, executa a avaliação no conjunto de teste
+        if best_model_state is not None:
+            best_model_path = f"/home/hygo/Development/recommendations/data/results/{study_name}_best_model.pth"
+            torch.save(best_model_state, best_model_path)
+            self.logger.info(f"Pesos do melhor modelo salvos em {best_model_path}")
+        else:
+            self.logger.warning("Nenhum estado de melhor modelo foi capturado.")
+
+        # Fase de avaliação no conjunto de teste
         if self.check_best:
-            self.logger.info("Running test evaluation on best configuration...")
-            test_score, test_results, test_evaluator = self.run_experiment(test_datapack, config)
-            self.logger.info(f"Test results for the provided parameters:\n{test_results}")
-            self.logger.info(test_evaluator.results)
+            test_score, test_results, test_evaluator, test_dataset, best_model = self._evaluate_model(test_datapack, config, best_model_state)
+            self.logger.info(f"Score no conjunto de teste: {test_score:.4f}")
+            self.logger.info(f"Resultados no conjunto de teste:\n{test_results}")
             if self.dump_results:
                 dump_trial_results(test_evaluator.results, config, f'{study_name}_TEST')
 
+            # Exemplo de recomendação para um usuário (usando o primeiro usuário do dataset de teste)
+            try:
+                sample_user = test_dataset.user_index[0]
+                recommendations = best_model.recommend(sample_user, self.topn)
+                self.logger.info(f"Recomendações para o usuário {sample_user}: {recommendations}")
+            except Exception as e:
+                self.logger.error(f"Erro ao gerar recomendação de exemplo: {e}")
+
 
 def test_data_format(next_item_only):
-    if next_item_only: # e.g., lorentzfm is not suitable for sequential prediction
+    if next_item_only:  # e.g., lorentzfm não é adequado para predição sequencial
         return ('interactions', dict(stepwise=True, max_steps=1))
-    return 'sequential' # 'sequential' will enable v
+    return 'sequential'
+
 
 def train_data_format(model_name):
     sparse = ['svd', 'random', 'mostpop']
@@ -163,14 +230,27 @@ def train_data_format(model_name):
     if model_name in sparse:
         return 'sparse'
     if model_name in sequential:
-        return 'sequential' # pandas Series
+        return 'sequential'  # pandas Series
     if model_name in sequential_packed:
-        return 'sequential_packed' # csr-like format
+        return 'sequential_packed'  # csr-like format
     if model_name in sequential_typed:
-        return 'sequential_typed' # numba dict
+        return 'sequential_typed'  # numba dict
     return 'default'
 
+
 def return_config() -> dict:
-    return {'batch_size': 256, 'learning_rate': 0.005, 'hidden_units': 128, 'num_blocks': 3, 'dropout_rate': 0.2,
-     'num_heads': 1, 'l2_emb': 0.0, 'maxlen': 200, 'batch_quota': None, 'seed': 0, 'sampler_seed': 789, 'device': None,
-     'max_epochs': 8}
+    return {
+        'batch_size': 256,
+        'learning_rate': 0.005,
+        'hidden_units': 128,
+        'num_blocks': 3,
+        'dropout_rate': 0.2,
+        'num_heads': 1,
+        'l2_emb': 0.0,
+        'maxlen': 200,
+        'batch_quota': None,
+        'seed': 0,
+        'sampler_seed': 789,
+        'device': None,
+        'max_epochs': 8
+    }

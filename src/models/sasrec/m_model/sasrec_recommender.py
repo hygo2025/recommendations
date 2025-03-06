@@ -4,7 +4,7 @@ from typing import Optional, Union
 import numpy as np
 import torch
 
-from sasrec_module import SASRec
+from .sasrec_module import SASRec
 from ..utils import get_torch_device, topidx
 
 
