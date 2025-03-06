@@ -7,7 +7,7 @@ from tqdm import tqdm
 from src.models.evaluation import Evaluator
 from src.models.sasrec import defaults
 from src.models.sasrec.data.movielens_data_setup import MovieLensDataSetup
-from src.models.sasrec.data.processor import DataSet
+from src.models.sasrec.data.movielens_dataset import MovielensDataSet
 from src.models.sasrec.m_model.sampler import packed_sequence_batch_sampler
 from src.models.sasrec.m_model.sasrec_recommender import SASRecModel
 from src.models.sasrec.utils import save_config, dump_trial_results, fix_torch_seed
@@ -65,9 +65,9 @@ class SasRecRunner(AbstractRunner):
 
     def run_experiment(self, datapack, config):
         # Cria a instância do dataset e inicializa os formatos necessários
-        dataset = DataSet(
+        dataset = MovielensDataSet(
             datapack,
-            name=self.dataset,
+            dataset_name=self.dataset,
             train_format='sequential_packed',
             test_format='sequential'
         )

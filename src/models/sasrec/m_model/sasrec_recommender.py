@@ -1,15 +1,14 @@
 from functools import partial
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 import numpy as np
 import torch
 
-from .sasrec_module import SASRec
-
+from sasrec_module import SASRec
 from ..utils import get_torch_device, topidx
 
+
 class InvalidInputData(Exception): pass
-# dataframe_to_packed_sequences dataframe_to_sequences
 
 class SASRecModel:
     def __init__(self, config: dict, n_items: int):

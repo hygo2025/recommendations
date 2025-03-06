@@ -6,14 +6,14 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from src.models.sasrec.data.processor import DataSet
+from src.models.sasrec.data.movielens_dataset import MovielensDataSet
 from src.models.sasrec.m_model.sasrec_recommender import SASRecModel
 
 
 class Evaluator:
     def __init__(
         self,
-        dataset: DataSet,
+        dataset: MovielensDataSet,
         topn: int,
         evaluation_callback: Optional[Callable[..., None]] = None
     ) -> None:
@@ -53,7 +53,7 @@ class Evaluator:
         return self._results[self._last_used_key]
 
 
-def evaluate(model: SASRecModel, dataset: DataSet, topn: int):
+def evaluate(model: SASRecModel, dataset: MovielensDataSet, topn: int):
     with dataset.formats(train='sequential'): # model may have used a different format - restoring
         train_data = dataset.train
     test_data = dataset.test
