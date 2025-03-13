@@ -1,5 +1,5 @@
 PYTHON_VERSION = 3.8.10
-VENV_DIR = .local
+VENV_DIR = .local-rec
 REQUIREMENTS_FILE = requirements.txt
 ACTIVATE = . $(VENV_DIR)/bin/activate
 LIB_INSTALL_PATH = ~/.local/spark/lib-jars/

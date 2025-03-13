@@ -165,3 +165,4 @@ terraform.rc
 **/.DS_Store
 
 .idea
+.local-rec
