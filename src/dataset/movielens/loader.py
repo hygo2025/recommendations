@@ -1,7 +1,6 @@
 import os
 import pandas as pd
 
-from pyspark.sql import SparkSession, DataFrame
 
 from src.dataset.movielens.downloader import Downloader
 from src.utils.enums import MovieLensDataset, MovieLensType
@@ -29,19 +28,16 @@ class Loader:
 
     def load_pandas(self, dataset: MovieLensDataset, ml_type: MovieLensType) -> pd.DataFrame:
         file_path = self._get_file_path(dataset, ml_type)
+        if dataset == MovieLensDataset.ML_1M:
+            file_path = file_path.replace(".csv", ".dat")
         if not os.path.exists(file_path):
             self._ensure_dataset(dataset)
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"O arquivo {file_path} não foi encontrado mesmo após o download.")
-        df = pd.read_csv(file_path)
-        return df
 
-    def load_spark(self, dataset: MovieLensDataset, ml_type: MovieLensType) -> DataFrame:
-        file_path = self._get_file_path(dataset, ml_type)
-        if not os.path.exists(file_path):
-            self._ensure_dataset(dataset)
-            if not os.path.exists(file_path):
-                raise FileNotFoundError(f"O arquivo {file_path} não foi encontrado mesmo após o download.")
-        spark = SparkSession.builder.appName("MovieLensDataLoader").getOrCreate()
-        df = spark.read.csv(file_path, header=True, inferSchema=True)
+
+        if dataset == MovieLensDataset.ML_1M and ml_type == MovieLensType.RATINGS: #TODO: Implementar o resto dos tipos
+            df = pd.read_csv(file_path, sep="::", engine="python", names=["userId", "movieId", "rating", "timestamp"])
+        else:
+            df = pd.read_csv(file_path)
         return df
