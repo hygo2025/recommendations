@@ -19,8 +19,6 @@ check_python_version:
 		 echo "Python version $(PYTHON_VERSION) is already installed."; \
 			 fi
 
-setup_java:
-	bash ./scripts/install_java.sh
 
 $(VENV_DIR): check_python_version
 	@echo "Creating virtual environment in $(VENV_DIR)..."
@@ -28,7 +26,7 @@ $(VENV_DIR): check_python_version
 	pyenv exec python -m venv $(VENV_DIR)
 	$(ACTIVATE) && pip install --upgrade pip && pip install -r $(REQUIREMENTS_FILE)
 
-install: setup_java $(VENV_DIR)
+install: $(VENV_DIR)
 	@if [ -z "$(shell ls $(LIB_INSTALL_PATH)/hadoop-aws* 2>/dev/null)" ]; then \
 		echo "Libraries not found. Running the setup script."; \
 		bash ./scripts/download_libs.sh; \
@@ -45,7 +43,5 @@ clean:
 
 remove: clean
 	rm -f $(REQUIREMENTS_FILE)
-
-
 
 .PHONY: install update clean remove

@@ -13,23 +13,6 @@ class MovieLensType(Enum):
     TAGS = "tags.csv"
 
 
-class RunnerEventType(Enum):
-    SAR = "sar"
-    SAS = "sas"
-    SAS_REC = "sas_rec"
-
-    @classmethod
-    def value_of(cls, value):
-        for item in cls:
-            if item.value == value:
-                return item
-        raise ValueError(f"{value} is not a valid {cls.__name__}")
-
-
-class ItemSimMeasure(Enum):
-    SIM_COCCURRENCE = "cooccurrence"
-    SIM_COSINE = "cosise"
-
 class TargetMetric(Enum):
     HR = "HR"
     MRR = "MRR"

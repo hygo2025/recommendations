@@ -1,10 +1,8 @@
 import copy
-import logging
 import torch
 from datetime import datetime
 from typing import Optional
 
-from tqdm import tqdm
 import numpy as np
 
 from src.models.evaluation import Evaluator
@@ -14,7 +12,6 @@ from src.models.sasrec.data.movielens_dataset import MovielensDataSet
 from src.models.sasrec.m_model.sampler import packed_sequence_batch_sampler
 from src.models.sasrec.m_model.sasrec_recommender import SASRecModel
 from src.models.sasrec.utils import save_config, dump_trial_results, fix_torch_seed
-from src.runners.abstract_runnner import AbstractRunner
 from src.utils.enums import MovieLensDataset, TargetMetric
 from src.utils.logger import Logger
 
@@ -30,10 +27,10 @@ class EarlyStopping(TrialStopException):
     pass
 
 
-class SasRecRunner(AbstractRunner):
+class SasRecRunner:
     def __init__(self,
                  model: str = 'sasrec',
-                 dataset: MovieLensDataset = MovieLensDataset.ML_1M,
+                 dataset: MovieLensDataset = MovieLensDataset.ML_32M,
                  time_offset: float = 0.95,
                  target_metric: TargetMetric = TargetMetric.NDCG,
                  topn: int = 10,
@@ -132,7 +129,6 @@ class SasRecRunner(AbstractRunner):
             raise ValueError("Número de épocas é muito pequeno para realizar validação.")
 
         best_score = -np.inf
-        best_epoch = None
         best_model_state = None
 
         for epoch in range(max_epochs):
@@ -147,7 +143,6 @@ class SasRecRunner(AbstractRunner):
                     self.logger.info(f"Época {epoch + 1}: Loss = {loss:.4f}, Validação = {curr_score:.4f}")
                     if curr_score > best_score:
                         best_score = curr_score
-                        best_epoch = epoch
                         best_model_state = copy.deepcopy(model.model.state_dict())
                         self.logger.info(f"Melhor modelo atualizado na época {epoch + 1} com score {curr_score:.4f}")
                 except EarlyStopping:
@@ -231,8 +226,10 @@ class SasRecRunner(AbstractRunner):
 
             # Exemplo de recomendação para um usuário (usando o primeiro usuário do dataset de teste)
             try:
-                sample_user = test_dataset.user_index[0]
-                recommendations = best_model.recommend(sample_user, self.topn) #TODO Aqui ta dando erro
+                sample_user = 101
+                # Supondo que 'user_histories' seja um dicionário ou lista com os históricos dos usuários:
+                sample_history = test_dataset.test.loc[sample_user]
+                recommendations = best_model.recommend(sample_history, self.topn, user=sample_user)
                 self.logger.info(f"Recomendações para o usuário {sample_user}: {recommendations}")
             except Exception as e:
                 self.logger.error(f"Erro ao gerar recomendação de exemplo: {e}")
@@ -262,17 +259,20 @@ def train_data_format(model_name):
 
 def return_config() -> dict:
     return {
-        'batch_size': 256,
-        'learning_rate': 0.005,
+        'batch_size': 512,
+        'learning_rate': 0.01,
         'hidden_units': 128,
         'num_blocks': 3,
         'dropout_rate': 0.2,
-        'num_heads': 1,
+        'num_heads': 2,
         'l2_emb': 0.0,
         'maxlen': 200,
         'batch_quota': None,
         'seed': 0,
         'sampler_seed': 789,
         'device': None,
-        'max_epochs': 8
+        'max_epochs': 200
     }
+
+if __name__ == "__main__":
+    SasRecRunner().run()
