@@ -5,10 +5,13 @@ import pandas as pd
 from src.dataset.movielens.downloader import Downloader
 from src.utils.enums import MovieLensDataset, MovieLensType
 from src.utils.logger import Logger
+from config import settings
+
 
 
 class Loader:
-    def __init__(self, download_folder="/tmp/dataset", extract_folder="/tmp/dataset"):
+    def __init__(self, download_folder=settings.get("DOWNLOAD_FOLDER", os.environ.get("DOWNLOAD_FOLDER")),
+                 extract_folder=settings.get("DOWNLOAD_FOLDER", os.environ.get("DOWNLOAD_FOLDER"))):
         self.extract_folder = extract_folder
         self.download_folder = download_folder
         self.logger = Logger.get_logger(name="Loader")
