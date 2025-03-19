@@ -25,7 +25,7 @@ class Loader:
         if not os.path.exists(dataset_folder):
             self.logger.info(f"Dataset {dataset.name} não encontrado em {dataset_folder}. Iniciando download e extração...")
             downloader = Downloader(download_folder=self.download_folder, extract_folder=self.extract_folder)
-            downloader.download_and_extract_dataset(dataset)
+            # downloader.download_and_extract_dataset(dataset)
         else:
             self.logger.info(f"Dataset {dataset.name} já existe em {dataset_folder}.")
 
