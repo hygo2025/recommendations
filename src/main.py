@@ -242,12 +242,9 @@ def test_data_format(next_item_only):
 
 
 def train_data_format(model_name):
-    sparse = ['svd', 'random', 'mostpop']
-    sequential_packed = ['sasrec', 'sasrecb', 'hypsasrec', 'hypsasrecb']
+    sequential_packed = ['sasrec']
     sequential = []
     sequential_typed = []
-    if model_name in sparse:
-        return 'sparse'
     if model_name in sequential:
         return 'sequential'  # pandas Series
     if model_name in sequential_packed:
